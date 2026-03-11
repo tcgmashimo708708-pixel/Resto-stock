@@ -31,13 +31,18 @@ export default function RecipesPage() {
 
     /**
      * 分数文字列（1/4など）または数値文字列をnumberに変換
+     * 全角数字・全角スラッシュにも対応
      * 不正な入力の場合はNaNを返す
      */
     const parseFraction = (value: string): number => {
-        const trimmed = value.trim();
+        // 全角数字を半角に、全角スラッシュを半角スラッシュに変換
+        let strVal = String(value).trim()
+            .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0))
+            .replace(/／/g, '/');
+
         // 分数形式 (e.g. "1/4", "2/3")
-        if (trimmed.includes("/")) {
-            const parts = trimmed.split("/");
+        if (strVal.includes("/")) {
+            const parts = strVal.split("/");
             if (parts.length === 2) {
                 const numerator = parseFloat(parts[0]);
                 const denominator = parseFloat(parts[1]);
@@ -48,7 +53,7 @@ export default function RecipesPage() {
             return NaN;
         }
         // 数値形式
-        return parseFloat(trimmed);
+        return parseFloat(strVal);
     };
 
     /**
@@ -374,6 +379,7 @@ export default function RecipesPage() {
                                 <Input
                                     id="quantity"
                                     type="text"
+                                    inputMode="text"
                                     value={formData.quantity_required}
                                     onChange={(e) => setFormData({ ...formData, quantity_required: e.target.value })}
                                     placeholder="例: 150, 1/4, 1/3"
