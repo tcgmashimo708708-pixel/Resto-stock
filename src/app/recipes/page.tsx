@@ -26,8 +26,57 @@ export default function RecipesPage() {
     const [formData, setFormData] = useState({
         id: "", // 編集時のみ使用
         ingredient_id: "",
-        quantity_required: 0,
+        quantity_required: "" as string, // 分数入力も受け付けるためstring型に
     });
+
+    /**
+     * 分数文字列（1/4など）または数値文字列をnumberに変換
+     * 不正な入力の場合はNaNを返す
+     */
+    const parseFraction = (value: string): number => {
+        const trimmed = value.trim();
+        // 分数形式 (e.g. "1/4", "2/3")
+        if (trimmed.includes("/")) {
+            const parts = trimmed.split("/");
+            if (parts.length === 2) {
+                const numerator = parseFloat(parts[0]);
+                const denominator = parseFloat(parts[1]);
+                if (!isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
+                    return numerator / denominator;
+                }
+            }
+            return NaN;
+        }
+        // 数値形式
+        return parseFloat(trimmed);
+    };
+
+    /**
+     * 数値を表示用の分数文字列に変換
+     * 0.5 → "1/2", 0.25 → "1/4", 0.75 → "3/4" など。切り切れない場合は数値のまま返す
+     */
+    const formatQuantity = (num: number): string => {
+        if (Number.isInteger(num)) return String(num);
+        const commonFractions: { value: number; label: string }[] = [
+            { value: 1/8, label: "1/8" }, { value: 1/6, label: "1/6" },
+            { value: 1/5, label: "1/5" }, { value: 1/4, label: "1/4" },
+            { value: 1/3, label: "1/3" }, { value: 3/8, label: "3/8" },
+            { value: 2/5, label: "2/5" }, { value: 1/2, label: "1/2" },
+            { value: 3/5, label: "3/5" }, { value: 5/8, label: "5/8" },
+            { value: 2/3, label: "2/3" }, { value: 3/4, label: "3/4" },
+            { value: 4/5, label: "4/5" }, { value: 5/6, label: "5/6" },
+            { value: 7/8, label: "7/8" },
+        ];
+        // 整数部分と小数部分に分ける
+        const intPart = Math.floor(num);
+        const fracPart = num - intPart;
+        const match = commonFractions.find(f => Math.abs(f.value - fracPart) < 0.001);
+        if (match) {
+            return intPart > 0 ? `${intPart} ${match.label}` : match.label;
+        }
+        // 一致する分数がなければ数値をそのまま表示
+        return String(parseFloat(num.toFixed(4)));
+    };
 
     // 初期データ（メニュー一覧と食材一覧）の取得
     useEffect(() => {
@@ -79,17 +128,19 @@ export default function RecipesPage() {
             setFormData({
                 id: recipe.id,
                 ingredient_id: recipe.ingredient_id,
-                quantity_required: recipe.quantity_required,
+                // 保存値（数値）を分数表記に戻して表示
+                quantity_required: formatQuantity(recipe.quantity_required),
             });
         } else {
-            setFormData({ id: "", ingredient_id: "", quantity_required: 0 });
+            setFormData({ id: "", ingredient_id: "", quantity_required: "" });
         }
         setIsDialogOpen(true);
     };
 
     const handleSave = async () => {
-        if (!selectedMenuId || !formData.ingredient_id || formData.quantity_required <= 0) {
-            toast.error("正しく入力してください");
+        const parsedQty = parseFraction(String(formData.quantity_required));
+        if (!selectedMenuId || !formData.ingredient_id || isNaN(parsedQty) || parsedQty <= 0) {
+            toast.error("正しく入力してください（例: 150, 1/4, 0.5）");
             return;
         }
 
@@ -97,7 +148,7 @@ export default function RecipesPage() {
             // 編集モード
             const { error } = await supabase
                 .from("recipes")
-                .update({ quantity_required: formData.quantity_required })
+                .update({ quantity_required: parsedQty })
                 .eq("id", formData.id);
 
             if (error) {
@@ -120,7 +171,7 @@ export default function RecipesPage() {
                 .insert([{
                     menu_item_id: selectedMenuId,
                     ingredient_id: formData.ingredient_id,
-                    quantity_required: formData.quantity_required,
+                    quantity_required: parsedQty,
                 }]);
 
             if (error) {
@@ -235,7 +286,7 @@ export default function RecipesPage() {
                                             recipes.map((recipe) => (
                                                 <TableRow key={recipe.id}>
                                                     <TableCell className="font-medium">{recipe.ingredient?.name}</TableCell>
-                                                    <TableCell>{recipe.quantity_required}</TableCell>
+                                                    <TableCell>{formatQuantity(recipe.quantity_required)}</TableCell>
                                                     <TableCell>{recipe.ingredient?.unit}</TableCell>
                                                     <TableCell className="text-right">
                                                         <Button variant="ghost" className="text-muted-foreground mr-2" size="sm" onClick={() => openDialog(recipe)}>
@@ -265,7 +316,7 @@ export default function RecipesPage() {
                                                 <div>
                                                     <div className="font-bold text-lg">{recipe.ingredient?.name}</div>
                                                     <div className="text-muted-foreground text-sm mt-0.5">
-                                                        1食あたり: <span className="font-bold text-foreground">{recipe.quantity_required} {recipe.ingredient?.unit}</span>
+                                                        1食あたり: <span className="font-bold text-foreground">{formatQuantity(recipe.quantity_required)} {recipe.ingredient?.unit}</span>
                                                     </div>
                                                 </div>
                                                 <div className="flex gap-2 shrink-0">
@@ -319,15 +370,18 @@ export default function RecipesPage() {
                             <Label htmlFor="quantity" className="text-right">
                                 必要量 <span className="text-destructive">*</span>
                             </Label>
-                            <Input
-                                id="quantity"
-                                type="number"
-                                step="0.1"
-                                value={formData.quantity_required || ""}
-                                onChange={(e) => setFormData({ ...formData, quantity_required: Number(e.target.value) })}
-                                className="col-span-3"
-                                placeholder="例: 150"
-                            />
+                            <div className="col-span-3 space-y-1">
+                                <Input
+                                    id="quantity"
+                                    type="text"
+                                    value={formData.quantity_required}
+                                    onChange={(e) => setFormData({ ...formData, quantity_required: e.target.value })}
+                                    placeholder="例: 150, 1/4, 1/3"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    整数・小数・分数（1/4, 1/3など）で入力できます
+                                </p>
+                            </div>
                         </div>
                     </div>
                     <DialogFooter>
