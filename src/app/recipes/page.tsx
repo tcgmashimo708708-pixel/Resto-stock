@@ -373,15 +373,19 @@ export default function RecipesPage() {
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="quantity" className="text-right">
-                                必要量 <span className="text-destructive">*</span>
+                                必要量 <br/><span className="text-xs text-muted-foreground">(分数対応)</span> <span className="text-destructive">*</span>
                             </Label>
                             <div className="col-span-3 space-y-1">
                                 <Input
+                                    key="quantity-fraction-input"
                                     id="quantity"
                                     type="text"
                                     inputMode="text"
+                                    autoComplete="off"
+                                    autoCorrect="off"
+                                    spellCheck={false}
                                     value={formData.quantity_required}
-                                    onChange={(e) => setFormData({ ...formData, quantity_required: e.target.value })}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, quantity_required: e.target.value }))}
                                     placeholder="例: 150, 1/4, 1/3"
                                 />
                                 <p className="text-xs text-muted-foreground">
